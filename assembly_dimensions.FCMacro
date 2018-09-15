@@ -1,44 +1,11 @@
+# ---------------------------------------------------------------------------
+# Repo: https://github.com/ceremcem/assembly-dimensions
+# ---------------------------------------------------------------------------
 import FreeCAD
 import re 
-
 echo = FreeCAD.Console.PrintMessage
 
-"""
-Description: 
-----------------
 
-Takes the command, evaluates with params, writes results to next column of the same row
-
-Current restrictions 
---------------------------
-
-Searches through A1 to A1000 only
-
-Syntax: 
-----------
-
-	#! command param [param [param...]]
-
-Commands: 
-----------------
-
-1. distance from element-label-1 to element-label-2
-
-	returns: distance, distance.x, distance.y, distance.z 
-
-	example: 
-
-		#! distance from front to back
-
-2. doc-name the-regex-string 
-
-	returns: regex variables as is 
-
-	example: 
-	
-		#! doc-name ^([0-9]+)x([0-9]+)-.*
-
-"""
 def get_plane(p1, p2, p3): 
 	edge1 = p1 - p2 
 	edge2 = p1 - p3 
@@ -55,47 +22,63 @@ sheets = App.ActiveDocument.findObjects('Spreadsheet::Sheet')
 cmd_regex = re.compile('^#!\s?([a-z-]+)\s?(.*)')
 
 alph = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+max_null_cells = 3
 
 for sheet in sheets: 
-	for row in range(1, 1000):
-		#echo('searching %d' % row)
-		row_index = 'A' + str(row)
-		try:
-			content = sheet.get('A%d' % row)
-		except: 
-			break
-		search = cmd_regex.search(content)
-		if search: 
-			#echo('command row found: ' + content)
-			cmd = search.group(1)
-			try: 
-				args = search.group(2)
+	null_rows = 0
+	for col_index in range(0, len(alph)-1):
+		col = alph[col_index] 
+		for row in range(1, 100):
+			cell = '%s%d'  % (col, row)
+			#echo('searching %s, ' % cell)
+			try:
+				content = sheet.get(cell)
 			except: 
-				args = '' 
-			#echo("command is: %s param is: %s\n" % (cmd, args))
+				null_rows += 1	
+				if null_rows > max_null_cells:
+					break
+				else:
+					continue 
+			null_rows = 0
+			
+			try:
+				search = cmd_regex.search(content)
+			except:
+				continue 
 
-			# Use document name as parameter source 
-			if cmd == 'doc-name' and len(args) > 0: 
-				regex_pattern = re.compile(args)
-				match = regex_pattern.search(doc_name)
-				echo('found regex: %s\n' % args)
-				if match:
-					for g in range(0, len(match.groups())):
-						sheet.set('%s%d' % (alph[g + 1], row), match.group(g+1))
-
-			elif cmd == 'distance':
-				_from, label1, _to, label2 = args.split()
-				if _from == 'from' and _to == 'to':
-					echo('found distance, from %s to %s: ' % (label1, label2))
-					try:
-						x1 = App.ActiveDocument.getObjectsByLabel(label1)[0].Shape.Vertexes[0].Point 
-						x2 = get_element_plane(App.ActiveDocument.getObjectsByLabel(label2)[0].Shape)
-						dist = x1.distanceToPlane(*x2)
-						sheet.set('B%d' % row, '=%f mm' % dist)
-						echo('%f mm\n' % dist)	
-					except:
-						echo('ERROR while calculating distance...')
-
+			if search: 
+				#echo('command row found: ' + content)
+				cmd = search.group(1)
+				try: 
+					args = search.group(2)
+				except: 
+					args = '' 
+				#echo("command is: %s param is: %s\n" % (cmd, args))
+	
+				# Use document name as parameter source 
+				if cmd == 'doc-name' and len(args) > 0: 
+					regex_pattern = re.compile(args)
+					match = regex_pattern.search(doc_name)
+					echo('found regex: %s\n' % args)
+					if match:
+						for g in range(0, len(match.groups())):
+							sheet.set('%s%d' % (alph[g + col_index + 1], row), match.group(g+1))
+	
+				elif cmd == 'distance' or cmd == 'dist':
+					_from, label1, _to, label2 = args.split()
+					if _from == 'from' and _to == 'to':
+						echo('Distance from %s to %s: ' % (label1, label2))
+						try:
+							x1 = App.ActiveDocument.getObjectsByLabel(label1)[0].Shape.Vertexes[0].Point 
+							x2 = get_element_plane(App.ActiveDocument.getObjectsByLabel(label2)[0].Shape)
+							dist = x1.distanceToPlane(*x2)
+							if dist < 0:
+								dist = -dist
+							dest_cell = '%s%d' % (alph[col_index + 1], row)
+							sheet.set(dest_cell, '=%f mm' % dist)
+							echo('%f mm (written into %s)\n' % (dist, dest_cell))	
+						except e:
+							echo('ERROR while calculating distance...')
+							echo(e)
+	
 App.ActiveDocument.recompute()
-
-echo('Assembly Dimensions refreshed.')
