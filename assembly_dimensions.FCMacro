@@ -77,8 +77,8 @@ for sheet in sheets:
 							dest_cell = '%s%d' % (alph[col_index + 1], row)
 							sheet.set(dest_cell, '=%f mm' % dist)
 							echo('%f mm (written into %s)\n' % (dist, dest_cell))	
-						except e:
-							echo('ERROR while calculating distance...')
-							echo(e)
-	
+						except Exception, e:
+							echo('ERROR while calculating distance:')
+							raise e
+
 App.ActiveDocument.recompute()
