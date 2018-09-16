@@ -28,8 +28,6 @@ def get_shape(obj):
 	for f in obj:
 		try: 
 			if f.Shape:
-				echo('returning')
-				echo(f)
 				return f.Shape 
 		except:
 			pass
