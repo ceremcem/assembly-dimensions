@@ -24,6 +24,32 @@ cmd_regex = re.compile('^#!\s?([a-z-]+)\s?(.*)')
 alph = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 max_null_cells = 3
 
+def get_shape(obj):
+	for f in obj:
+		try: 
+			if f.Shape:
+				echo('returning')
+				echo(f)
+				return f.Shape 
+		except:
+			pass
+
+def calc_dist(label1, label2):
+	shape1 = get_shape(App.ActiveDocument.getObjectsByLabel(label1))
+	shape2 = get_shape(App.ActiveDocument.getObjectsByLabel(label2))
+	x1 = shape1.Vertexes[0].Point 
+	x2 = get_element_plane(shape2)
+	dist = x1.distanceToPlane(*x2)
+	return dist 
+
+def calc_dist2(label1, label2):
+	#echo("App.ActiveDocument.getObjectsByLabel('%s')[0].Shape" % label1)
+	shape1 = get_shape(App.ActiveDocument.getObjectsByLabel(label1))
+	shape2 = get_shape(App.ActiveDocument.getObjectsByLabel(label2))
+	dist = shape1.Vertexes[0].Point.distanceToPlane(shape2.BoundBox.Center, shape2.Faces[0].Surface.Axis)
+	return dist 
+
+
 for sheet in sheets: 
 	null_rows = 0
 	for col_index in range(0, len(alph)-1):
@@ -68,10 +94,10 @@ for sheet in sheets:
 					_from, label1, _to, label2 = args.split()
 					if _from == 'from' and _to == 'to':
 						echo('Distance from %s to %s: ' % (label1, label2))
-						try:
-							x1 = App.ActiveDocument.getObjectsByLabel(label1)[0].Shape.Vertexes[0].Point 
-							x2 = get_element_plane(App.ActiveDocument.getObjectsByLabel(label2)[0].Shape)
-							dist = x1.distanceToPlane(*x2)
+						try:			
+							#dist = calc_dist(label1, label2)	
+							dist = calc_dist2(label1, label2)
+
 							if dist < 0:
 								dist = -dist
 							dest_cell = '%s%d' % (alph[col_index + 1], row)
