@@ -4,6 +4,7 @@
 import FreeCAD
 import re 
 echo = FreeCAD.Console.PrintMessage
+warn = FreeCAD.Console.PrintWarning
 
 
 def get_plane(p1, p2, p3): 
@@ -19,7 +20,6 @@ def get_element_plane(shape):
 doc_name = App.ActiveDocument.Label
 
 sheets = App.ActiveDocument.findObjects('Spreadsheet::Sheet')
-cmd_regex = re.compile('^#!\s?([a-z-]+)\s?(.*)')
 
 alph = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 max_null_cells = 3
@@ -48,61 +48,69 @@ def calc_dist2(label1, label2):
 	return dist 
 
 
+cell_regex = re.compile('^([A-Z]+)([0-9]+)$')
+def get_cells(sheet): 
+	return filter(cell_regex.search, sheet.PropertiesList)
+
+def next_col(cell_name):
+	match = cell_regex.match(cell_name)
+	if match:
+		col_name = match.group(1)
+		row_num = match.group(2)
+		next_col_name = chr(ord(col_name) + 1)
+		return "%s%s" % (next_col_name, row_num)
+	else:
+		raise "how come no match?"
+	
+
+cmd_regex = re.compile('^#!\s?([a-z-]+)\s?(.*)')
 for sheet in sheets: 
-	null_rows = 0
-	for col_index in range(0, len(alph)-1):
-		col = alph[col_index] 
-		for row in range(1, 100):
-			cell = '%s%d'  % (col, row)
-			#echo('searching %s, ' % cell)
-			try:
-				content = sheet.get(cell)
+	for cell in get_cells(sheet):
+		#echo('cell: %s (next col: %s)\n' % (cell, next_col(cell)))
+		content = sheet.get(cell)			
+		try:
+			search = cmd_regex.search(content)
+		except:
+			# if not a string 
+			continue 
+
+		if search: 
+			#echo('command row found: ' + content)
+			cmd = search.group(1)
+			try: 
+				args = search.group(2)
 			except: 
-				null_rows += 1	
-				if null_rows > max_null_cells:
-					break
-				else:
-					continue 
-			null_rows = 0
-			
-			try:
-				search = cmd_regex.search(content)
-			except:
-				continue 
+				args = '' 
+			#echo("command is: %s param is: %s\n" % (cmd, args))
 
-			if search: 
-				#echo('command row found: ' + content)
-				cmd = search.group(1)
-				try: 
-					args = search.group(2)
-				except: 
-					args = '' 
-				#echo("command is: %s param is: %s\n" % (cmd, args))
-	
-				# Use document name as parameter source 
-				if cmd == 'doc-name' and len(args) > 0: 
-					regex_pattern = re.compile(args)
-					match = regex_pattern.search(doc_name)
-					echo('found regex: %s\n' % args)
-					if match:
-						for g in range(0, len(match.groups())):
-							sheet.set('%s%d' % (alph[g + col_index + 1], row), match.group(g+1))
-	
-				elif cmd == 'distance' or cmd == 'dist':
-					_from, label1, _to, label2 = args.split()
-					if _from == 'from' and _to == 'to':
-						echo('Distance from %s to %s: ' % (label1, label2))
-						try:			
-							#dist = calc_dist(label1, label2)	
-							dist = calc_dist2(label1, label2)
+			# Use document name as parameter source 
+			if cmd == 'doc-name' and len(args) > 0: 
+				regex_pattern = re.compile(args)
+				match = regex_pattern.search(doc_name)
+				echo('found regex: %s\n' % args)
+				if match:
+					for g in range(0, len(match.groups())):
+						sheet.set(next_col(cell), match.group(g+1))
 
-							if dist < 0:
-								dist = -dist
-							dest_cell = '%s%d' % (alph[col_index + 1], row)
-							sheet.set(dest_cell, '=%f mm' % dist)
-							echo('%f mm (written into %s)\n' % (dist, dest_cell))	
-						except Exception, e:
-							echo('ERROR while calculating distance:')
-							raise e
+			elif cmd == 'distance' or cmd == 'dist':
+				_from, label1, _to, label2 = args.split()
+				if _from == 'from' and _to == 'to':
+					echo('Distance from %s to %s: ' % (label1, label2))
+					dest_cell = next_col(cell)
+					diff_cell = next_col(dest_cell)
+					try:			
+						#dist = calc_dist(label1, label2)	
+						dist = calc_dist2(label1, label2)
+
+						if dist < 0:
+							dist = -dist
+						curr = sheet.get(dest_cell)
+						sheet.set(dest_cell, '=%f mm' % dist)
+						sheet.set(diff_cell, str(curr))
+						echo('%f mm (written into %s) (prev: %s)\n' % (dist, dest_cell, str(curr)))	
+					except Exception, e:
+						sheet.set(dest_cell, '=ERR_ASSEMBLY_DIMENSIONS')
+						warn('ERROR while calculating distance: %s\n' % str(e))
+
 
 App.ActiveDocument.recompute()
