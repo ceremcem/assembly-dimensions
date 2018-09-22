@@ -52,12 +52,12 @@ cell_regex = re.compile('^([A-Z]+)([0-9]+)$')
 def get_cells(sheet): 
 	return filter(cell_regex.search, sheet.PropertiesList)
 
-def next_col(cell_name):
+def next_col(cell_name, dist=1):
 	match = cell_regex.match(cell_name)
 	if match:
 		col_name = match.group(1)
 		row_num = match.group(2)
-		next_col_name = chr(ord(col_name) + 1)
+		next_col_name = chr(ord(col_name) + dist)
 		return "%s%s" % (next_col_name, row_num)
 	else:
 		raise "how come no match?"
@@ -90,7 +90,7 @@ for sheet in sheets:
 				echo('found regex: %s\n' % args)
 				if match:
 					for g in range(0, len(match.groups())):
-						sheet.set(next_col(cell), match.group(g+1))
+						sheet.set(next_col(cell, g+1), match.group(g+1))
 
 			elif cmd == 'distance' or cmd == 'dist':
 				_from, label1, _to, label2 = args.split()
@@ -110,7 +110,7 @@ for sheet in sheets:
 						echo('%f mm (written into %s) (prev: %s)\n' % (dist, dest_cell, str(curr)))	
 					except Exception, e:
 						sheet.set(dest_cell, '=ERR_ASSEMBLY_DIMENSIONS')
-						warn('ERROR while calculating distance: %s\n' % str(e))
+						warn('ERROR while calculating distance in cell %s: %s\n' % (cell, str(e)))
 
 
 App.ActiveDocument.recompute()
